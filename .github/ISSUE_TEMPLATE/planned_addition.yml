@@ -1,12 +1,11 @@
 name: Planned Additions
 description: Planned work on the pipeline hymenopteraanalysis
-label: planned_additions
+label: enhancement
 body:
   - type: textarea
     id: description
     attributes:
       label: Description of planned work
-    validations: false
 
   - type: textarea
     id: module_description
