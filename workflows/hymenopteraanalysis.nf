@@ -51,20 +51,20 @@ workflow HYMENOPTERAANALYSIS {
     ch_versions = Channel.empty()
 
     //
-    // SUBWORKFLOW: Read in samplesheet, validate and stage input files
+    // Run BLAST on input genes and organisms genomes
     //
     BLAST_ANALYSIS ()
     ch_versions = ch_versions.mix(BLAST_ANALYSIS.out.versions)
+
+    // ADD protein analysis SUBWORKFLOW?
+    // Extract protein signatures of genes and find inside organsisms genomes
 
     CUSTOM_DUMPSOFTWAREVERSIONS (
         ch_versions.unique().collectFile(name: 'collated_versions.yml')
     )
 
-    // 
-
     workflow_summary    = WorkflowHymenopteraanalysis.paramsSummaryMultiqc(workflow, summary_params)
     ch_workflow_summary = Channel.value(workflow_summary)
-
 
     ch_versions    = ch_versions.mix(MULTIQC.out.versions)
 }

@@ -1,0 +1,16 @@
+name: Planned Additions
+description: Planned work on the pipeline hymenopteraanalysis
+label: planned_additions
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of planned work
+    validations: false
+
+  - type: textarea
+    id: module_description
+    attributes:
+      label: Description of modules used
+      placeholder: |
+        Add link to nf-core module or describe the language and implementation.
