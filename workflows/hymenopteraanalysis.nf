@@ -9,11 +9,6 @@ def summary_params = NfcoreSchema.paramsSummaryMap(workflow, params)
 // Validate input parameters
 WorkflowHymenopteraanalysis.initialise(params, log)
 
-// TODO nf-core: Add all file path parameters for the pipeline to the list below
-// Check input path parameters to see if they exist
-def checkPathParamList = [ params.input-genes, params.input-organisms ]
-for (param in checkPathParamList) { if (param) { file(param, checkIfExists: true) } }
-
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     IMPORT LOCAL MODULES/SUBWORKFLOWS
@@ -23,8 +18,7 @@ for (param in checkPathParamList) { if (param) { file(param, checkIfExists: true
 //
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
-include { INPUT_CHECK           } from '../subworkflows/local/input_check'
-include { hymenoptera_analysis  } from '../subworkflows/local/hymenoptera_analysis'
+include { BLAST_ANALYSIS  } from '../subworkflows/local/hymenoptera_analysis'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -54,7 +48,7 @@ workflow HYMENOPTERAANALYSIS {
     // Run BLAST on input genes and organisms genomes
     //
     BLAST_ANALYSIS ()
-    ch_versions = ch_versions.mix(BLAST_ANALYSIS.out.versions)
+    ch_versions = ch_versions.mix(BLAST_ANALYSIS.out.version)
 
     // ADD protein analysis SUBWORKFLOW?
     // Extract protein signatures of genes and find inside organsisms genomes
@@ -63,10 +57,6 @@ workflow HYMENOPTERAANALYSIS {
         ch_versions.unique().collectFile(name: 'collated_versions.yml')
     )
 
-    workflow_summary    = WorkflowHymenopteraanalysis.paramsSummaryMultiqc(workflow, summary_params)
-    ch_workflow_summary = Channel.value(workflow_summary)
-
-    ch_versions    = ch_versions.mix(MULTIQC.out.versions)
 }
 
 /*
