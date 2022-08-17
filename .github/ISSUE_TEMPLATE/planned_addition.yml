@@ -1,6 +1,5 @@
 name: Planned Additions
 description: Planned work on the pipeline hymenopteraanalysis
-label: enhancement
 body:
   - type: textarea
     id: description
