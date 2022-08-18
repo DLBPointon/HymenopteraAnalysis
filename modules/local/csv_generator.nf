@@ -7,7 +7,7 @@ process CSV_GENERATOR {
     val ch_dir
 
     output:
-    tuple val(ch_item), path("*fasta")      , emit: fasta
+    path "*fasta"                           , emit: fasta
     path "versions.yml"                     , emit: versions
 
     script:

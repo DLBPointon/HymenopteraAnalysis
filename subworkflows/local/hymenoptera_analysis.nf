@@ -1,5 +1,7 @@
-include { CSV_GENERATOR as GENES_CSV_GENERATOR } from '../../modules/local/csv_generator'
+include { CSV_GENERATOR as GENES_CSV_GENERATOR  } from '../../modules/local/csv_generator'
 include { CSV_GENERATOR as GENOME_CSV_GENERATOR } from '../../modules/local/csv_generator'
+
+include { BLAST_MAKEBLASTDB                     } from '../../modules/nf-core/modules/blast/makeblastdb/main'
 
 workflow BLAST_ANALYSIS {
     main:
@@ -21,7 +23,6 @@ workflow BLAST_ANALYSIS {
     ch_genomes          = Channel.value(params.input_genomes.genomes.toString())
                             .splitCsv()
                             .flatten()
-                            .view()
 
     ch_genomes_dir      = Channel.value(params.input_genomes.directory)
 
@@ -29,7 +30,9 @@ workflow BLAST_ANALYSIS {
     ch_versions = ch_versions.mix(GENOME_CSV_GENERATOR.out.versions)
     GENOME_CSV_GENERATOR.out.fasta.view()
 
-    // MAKEBLASTDB of inputs
+    // MAKE DB PER INPUT GENE
+    BLAST_MAKEBLASTDB ( GENES_CSV_GENERATOR.out.fasta )
+    BLAST_MAKEBLASTDB.out.db.view()
 
     // SPLIT organisms into chunked fasta
 
