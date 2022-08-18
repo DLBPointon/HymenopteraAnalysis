@@ -2,6 +2,7 @@ include { CSV_GENERATOR as GENES_CSV_GENERATOR  } from '../../modules/local/csv_
 include { CSV_GENERATOR as GENOME_CSV_GENERATOR } from '../../modules/local/csv_generator'
 
 include { BLAST_MAKEBLASTDB                     } from '../../modules/nf-core/modules/blast/makeblastdb/main'
+include { SPLIT_FASTA                           } from '../../modules/local/split_fasta'
 
 workflow BLAST_ANALYSIS {
     main:
@@ -34,8 +35,15 @@ workflow BLAST_ANALYSIS {
     BLAST_MAKEBLASTDB ( GENES_CSV_GENERATOR.out.fasta )
     BLAST_MAKEBLASTDB.out.db.view()
 
-    // SPLIT organisms into chunked fasta
-
+    org_ch = GENOME_CSV_GENERATOR.out.fasta
+                .map { fasta -> 
+                tuple(
+                    [id   :   fasta.toString().split('/')[-1].split('.fasta')[0]],
+                fasta
+                )}
+    
+    SPLIT_FASTA ( org_ch )
+    SPLIT_FASTA.out.split_fasta.view()
     // BLASTN db against split fasta
 
     // Convert input GENES to protien - Curl ExPASy?
