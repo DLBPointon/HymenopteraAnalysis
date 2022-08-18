@@ -3,6 +3,8 @@ include { CSV_GENERATOR as GENOME_CSV_GENERATOR } from '../../modules/local/csv_
 
 workflow BLAST_ANALYSIS {
     main:
+
+    // Generates tuple([AM-CSD, fasta_tile]) FOR GENES
     ch_versions         = Channel.empty()
 
     ch_genes            = Channel.value(params.input_genes.genes.toString())
@@ -15,6 +17,7 @@ workflow BLAST_ANALYSIS {
     ch_versions = ch_versions.mix(GENES_CSV_GENERATOR.out.versions)
     GENES_CSV_GENERATOR.out.fasta.view()
 
+    // Generates tuple([Apis_mellifera, fasta_file]) for GENOMES
     ch_genomes          = Channel.value(params.input_genomes.genomes.toString())
                             .splitCsv()
                             .flatten()
