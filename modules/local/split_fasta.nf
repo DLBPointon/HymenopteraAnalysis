@@ -3,7 +3,7 @@ process SPLIT_FASTA {
     tuple val( meta ), path( fasta ) 
 
     output:
-    tuple val( meta ), path("*fa")    , emit: split_fasta
+    path("*fa")    , emit: split_fasta
 
     script:
     def split_by = task.ext.split_by ?: 100
