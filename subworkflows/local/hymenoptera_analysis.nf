@@ -1,9 +1,17 @@
+// SUB_WORKFLOW IMPORT
+include { FILTER_AND_NETWORK as FILTER_AND_NETWORK_NUC } from '../../subworkflows/local/filter_and_network'
+include { FILTER_AND_NETWORK as FILTER_AND_NETWORK_PEP } from '../../subworkflows/local/filter_and_network'
+
+// MODULE IMPORT
 include { CSV_GENERATOR as GENES_CSV_GENERATOR  } from '../../modules/local/csv_generator'
 include { CSV_GENERATOR as GENOME_CSV_GENERATOR } from '../../modules/local/csv_generator'
-
 include { BLAST_MAKEBLASTDB                     } from '../../modules/nf-core/modules/blast/makeblastdb/main'
+include { GET_MAPPING                           } from '../../modules/local/get_mapping'
 include { SPLIT_FASTA                           } from '../../modules/local/split_fasta'
 include { BLAST_BLASTN                          } from '../../modules/nf-core/modules/blast/blastn/main'
+include { BLAST_TBLASTN                         } from '../../modules/sanger-tol/nf-core//blast/tblastn/main'
+include { CAT_BLAST as CAT_TSV                  } from '../../modules/local/cat_blast'
+
 
 workflow BLAST_ANALYSIS {
     main:
@@ -15,32 +23,39 @@ workflow BLAST_ANALYSIS {
 
     ch_genes_dir        = Channel.value(params.input_genes.directory)
 
+    // Generates tuple([Apis_mellifera, fasta_file]) for GENOMES
+    Channel
+        .value(params.input_genomes.genomes.toString())
+        .splitCsv()
+        .flatten()
+        .set { ch_genomes }
+
+    Channel
+        .value(params.input_genomes.directory)
+        .set { ch_genomes_dir }
+
     GENES_CSV_GENERATOR ( ch_genes, ch_genes_dir )
     ch_versions = ch_versions.mix(GENES_CSV_GENERATOR.out.versions)
 
-    // Generates tuple([Apis_mellifera, fasta_file]) for GENOMES
-    ch_genomes          = Channel.value(params.input_genomes.genomes.toString())
-                            .splitCsv()
-                            .flatten()
-
-    ch_genomes_dir      = Channel.value(params.input_genomes.directory)
+    BLAST_MAKEBLASTDB ( GENES_CSV_GENERATOR.out.fasta )
+    ch_versions = ch_versions.mix(BLAST_MAKEBLASTDB.out.versions)
 
     GENOME_CSV_GENERATOR ( ch_genomes, ch_genomes_dir )
     ch_versions = ch_versions.mix(GENOME_CSV_GENERATOR.out.versions)
 
-    // MAKE DB PER INPUT GENE
+    GET_MAPPING ( GENOME_CSV_GENERATOR.out.fasta )
 
-    BLAST_MAKEBLASTDB ( GENES_CSV_GENERATOR.out.fasta )
-
-    org_ch = GENOME_CSV_GENERATOR.out.fasta
-                .map { fasta -> 
-                tuple([ id:     fasta.toString().split('/')[-1].split('.fasta')[0],
-                        type:   fasta.toString().split('/')[-1].split('_')[0]
-                    ],
-                    file(fasta)
-                )}
+    GENOME_CSV_GENERATOR.out.fasta
+        .map { fasta -> 
+        tuple([ id:     fasta.toString().split('/')[-1].split('.fasta')[0],
+                type:   fasta.toString().split('/')[-1].split('_')[0]
+            ],
+            file(fasta)
+        )}
+        .set { org_ch }
 
     SPLIT_FASTA ( org_ch )
+
     SPLIT_FASTA.out.split_fasta
         .flatten()
         .map { fasta -> 
@@ -55,28 +70,38 @@ workflow BLAST_ANALYSIS {
             database    : db
             }
         .set { split }
-    
-    //split.fastas.view()
-    //split.database.view()
 
+    // FOR NUCLEOTIDE BLAST
     BLAST_BLASTN ( 
         split.fastas,
-        split.database
+        split.fastas
                 )
+    ch_versions = ch_versions.mix(BLAST_BLASTN.out.versions)
 
-    BLAST_BLASTN.out.txt.view()
+    // FOR PEPTIDE BLAST
+    BLAST_TBLASTN (
+        split.fastas,
+        split.fastas
+    )
+    ch_versions = ch_versions.mix(BLAST_TBLASTN.out.versions)
 
-        // Convert input GENES to protien - Curl ExPASy?
-
-        // BLASTX 
+    // <--- split off as a subworkflow
+    BLAST_BLASTN.out.txt
+        .map { meta, file ->
+            tuple( file )}
+        .set { blast_nuc }
     
-    // BLASN.out.collect() -> CONCAT results together per gene
+    BLAST_TBLASTN.out.txt
+        .map { meta, file ->
+            tuple( file )}
+        .set { blast_pep }
 
-    // CONCAT gene results together
-
-    // Generate Graph per gene
-
-    // Generate Graph for both
+    FILTER_AND_NETWORK_NUC (    "NUC",
+                                blast_nucl.collect(),
+                                CAT_TSV.out.concat_blast )
+    FILTER_AND_NETWORK_PEP (    "PEP",
+                                blast_pep.collect(),
+                                CAT_TSV.out.concat_blast )
 
     emit:
     // CONCAT results 1
