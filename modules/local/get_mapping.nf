@@ -1,4 +1,9 @@
 process GET_MAPPING {
+    tag "${fasta}"
+    label "process_small"
+    
+    container 'dlbpointon/get_mapping:latest'
+
     input:
     path fasta
 
@@ -6,13 +11,12 @@ process GET_MAPPING {
     tuple val('mapping'), path ( "*tsv" )   , emit: mapped_tsv
 
     script:
-    def version = 'v1'
     """
-    /software/grit/conda/envs/Damon_project/bin/python3 $projectDir/bin/get_mapping.py $fasta
+    get_mapping.py $fasta
     
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        get_mapping: $version
+        get_mapping: \$(get_mapping.py -v)
     END_VERSIONS
     """
 }

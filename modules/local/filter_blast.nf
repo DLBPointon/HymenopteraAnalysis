@@ -1,26 +1,31 @@
 process FILTER_BLAST {
-    tag "$meta"
-    label "process_medium"
+    tag "${meta}"
+    label "process_small"
 
-    def version = '0.001-c2'
+    container 'dlbpointon/filter_blast:latest'
 
     input:
-    tuple val(meta), file( concat_blast_out )
+    tuple val( meta ), file( concat_blast_out )
+    val ( dtype )
 
     output:
-    tuple val( "results" ), file( "*.tsv")   , emit: final_tsv
-    path "versions.yml"                      , emit: versions
+    tuple val( "results" ), file( "*.tsv" )   , emit: final_tsv
+    path "versions.yml"                       , emit: versions
 
     script:
     def id = "results"
-    def type = "CDNA"
+    def type = dtype ?: 'UNKNOWN'
     def filt_percent = task.ext.args ?: 90.00
     """
-    /software/grit/conda/envs/Damon_project/bin/python3 $projectDir/bin/filter_blast.py $id $type $concat_blast_out $filt_percent
+    filter_blast.py \\
+    $id \\
+    $type \\
+    $concat_blast_out \\
+    $filt_percent
     
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        filter_blast: $version
+        filter_blast: \$(filter_blast.py -v)
     END_VERSIONS
     """
 }

@@ -1,15 +1,21 @@
 // SUB_WORKFLOW IMPORT
-include { FILTER_AND_NETWORK as FILTER_AND_NETWORK_NUC } from '../../subworkflows/local/filter_and_network'
-include { FILTER_AND_NETWORK as FILTER_AND_NETWORK_PEP } from '../../subworkflows/local/filter_and_network'
+include { FILTER_AND_NETWORK as FILTER_AND_NETWORK_NUC      } from '../../subworkflows/local/filter_and_network'
+include { FILTER_AND_NETWORK as FILTER_AND_NETWORK_PEP      } from '../../subworkflows/local/filter_and_network'
+include { FILTER_AND_NETWORK as FILTER_AND_NETWORK_SIG_NUC  } from '../../subworkflows/local/filter_and_network'
+include { FILTER_AND_NETWORK as FILTER_AND_NETWORK_SIG_PEP  } from '../../subworkflows/local/filter_and_network'
 
 // MODULE IMPORT
 include { CSV_GENERATOR as GENES_CSV_GENERATOR  } from '../../modules/local/csv_generator'
 include { CSV_GENERATOR as GENOME_CSV_GENERATOR } from '../../modules/local/csv_generator'
+include { CSV_GENERATOR as SIGS_CSV_GENERATOR   } from '../../modules/local/csv_generator'
 include { BLAST_MAKEBLASTDB                     } from '../../modules/nf-core/modules/blast/makeblastdb/main'
+include { SIGS_BLAST_MAKEBLASTDB                } from '../../modules/nf-core/modules/blast/makeblastdb/main'
 include { GET_MAPPING                           } from '../../modules/local/get_mapping'
 include { SPLIT_FASTA                           } from '../../modules/local/split_fasta'
 include { BLAST_BLASTN                          } from '../../modules/nf-core/modules/blast/blastn/main'
-include { BLAST_TBLASTN                         } from '../../modules/sanger-tol/nf-core//blast/tblastn/main'
+include { SIGS_BLAST_BLASTN                     } from '../../modules/nf-core/modules/blast/blastn/main'
+include { BLAST_TBLASTN                         } from '../../modules/sanger-tol/nf-core-modules/blast/tblastn/main'
+include { SIGS_BLAST_TBLASTN                    } from '../../modules/sanger-tol/nf-core-modules/blast/tblastn/main'
 include { CAT_BLAST as CAT_TSV                  } from '../../modules/local/cat_blast'
 
 
@@ -23,6 +29,10 @@ workflow BLAST_ANALYSIS {
 
     ch_genes_dir        = Channel.value(params.input_genes.directory)
 
+    ch_sigs             = Channel.value(params.input_pep_sig.sigs)
+
+    ch_sigs_dir         = Channel.value(params.input_pep_sig.directory)
+
     // Generates tuple([Apis_mellifera, fasta_file]) for GENOMES
     Channel
         .value(params.input_genomes.genomes.toString())
@@ -34,16 +44,14 @@ workflow BLAST_ANALYSIS {
         .value(params.input_genomes.directory)
         .set { ch_genomes_dir }
 
-    GENES_CSV_GENERATOR ( ch_genes, ch_genes_dir )
-    ch_versions = ch_versions.mix(GENES_CSV_GENERATOR.out.versions)
-
-    BLAST_MAKEBLASTDB ( GENES_CSV_GENERATOR.out.fasta )
-    ch_versions = ch_versions.mix(BLAST_MAKEBLASTDB.out.versions)
+    // <------------ CHUNK TO PREPARE QUERY GENOMES FOR BLAST
 
     GENOME_CSV_GENERATOR ( ch_genomes, ch_genomes_dir )
     ch_versions = ch_versions.mix(GENOME_CSV_GENERATOR.out.versions)
 
     GET_MAPPING ( GENOME_CSV_GENERATOR.out.fasta )
+
+    CAT_TSV ( GET_MAPPING.out.mapped_tsv.collect(), '' )
 
     GENOME_CSV_GENERATOR.out.fasta
         .map { fasta -> 
@@ -71,37 +79,89 @@ workflow BLAST_ANALYSIS {
             }
         .set { split }
 
-    // FOR NUCLEOTIDE BLAST
+    // <----------------- Chunk for SUBJECT GENES
+    GENES_CSV_GENERATOR ( ch_genes, ch_genes_dir )
+    ch_versions = ch_versions.mix(GENES_CSV_GENERATOR.out.versions)
+
+    BLAST_MAKEBLASTDB ( GENES_CSV_GENERATOR.out.fasta )
+    ch_versions = ch_versions.mix(BLAST_MAKEBLASTDB.out.versions)
+
+    // <----------------- Could be seperated off too.
     BLAST_BLASTN ( 
         split.fastas,
-        split.fastas
-                )
+        split.database
+    )
     ch_versions = ch_versions.mix(BLAST_BLASTN.out.versions)
 
-    // FOR PEPTIDE BLAST
-    BLAST_TBLASTN (
-        split.fastas,
-        split.fastas
-    )
-    ch_versions = ch_versions.mix(BLAST_TBLASTN.out.versions)
-
-    // <--- split off as a subworkflow
     BLAST_BLASTN.out.txt
         .map { meta, file ->
             tuple( file )}
         .set { blast_nuc }
-    
-    BLAST_TBLASTN.out.txt
-        .map { meta, file ->
-            tuple( file )}
-        .set { blast_pep }
 
     FILTER_AND_NETWORK_NUC (    "NUC",
-                                blast_nucl.collect(),
+                                blast_nuc.collect(),
                                 CAT_TSV.out.concat_blast )
-    FILTER_AND_NETWORK_PEP (    "PEP",
-                                blast_pep.collect(),
-                                CAT_TSV.out.concat_blast )
+    // <----------------- Could be seperated off too.
+    
+    if (params.run_pep_blast == "Y") {
+        GENES_CSV_GENERATOR ( ch_genes, ch_genes_dir )
+        ch_versions = ch_versions.mix(GENES_CSV_GENERATOR.out.versions)
+
+        BLAST_MAKEBLASTDB ( GENES_CSV_GENERATOR.out.fasta )
+        ch_versions = ch_versions.mix(BLAST_MAKEBLASTDB.out.versions)
+
+        BLAST_TBLASTN (
+            split.fastas,
+            split.database
+        )
+        ch_versions = ch_versions.mix(BLAST_TBLASTN.out.versions)
+        
+        BLAST_TBLASTN.out.txt
+            .map { meta, file ->
+                tuple( file )}
+            .set { blast_pep }
+
+        FILTER_AND_NETWORK_PEP (    "PEP",
+                                    blast_pep.collect(),
+                                    CAT_TSV.out.concat_blast )
+    }
+
+    if (params.run_sig_blast == "Y") {
+        SIGS_CSV_GENERATOR ( ch_sigs, ch_sigs_dir )
+        ch_versions = ch_versions.mix( SIGS_CSV_GENERATOR.out.versions )
+
+        SIGS_BLAST_MAKEBLASTDB ( SIGS_CSV_GENERATOR.out.fasta )
+        ch_versions = ch_versions.mix( SIGS_BLAST_MAKEBLASTDB.out.versions )
+
+        SIGS_BLAST_BLASTN ( 
+            split.fastas,
+            split.database
+        )
+        ch_versions = ch_versions.mix(SIGS_BLAST_BLASTN.out.versions)
+
+        SIGS_BLAST_BLASTN.out.txt
+            .map { meta, file ->
+                tuple( file )}
+            .set { blast_sig }
+
+        SIGS_BLAST_TBLASTN (
+            split.fastas,
+            split.database
+        )
+        ch_versions = ch_versions.mix(SIGS_BLAST_TBLASTN.out.versions)
+
+        SIGS_BLAST_TBLASTN.out.txt
+            .map { meta, file ->
+                tuple( file )}
+            .set { blast_pep }
+
+        FILTER_AND_NETWORK_SIGS_NUC (   "SIG-NUC",
+                                        blast_sig.collect(),
+                                        CAT_TSV.out.concat_blast )
+        FILTER_AND_NETWORK_SIGS_PEP (   "SIG-PEP",
+                                        blast_sig.collect(),
+                                        CAT_TSV.out.concat_blast )
+    }
 
     emit:
     // CONCAT results 1
